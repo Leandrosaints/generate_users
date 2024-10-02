@@ -1,6 +1,7 @@
 import pandas as pd
 import io
 import subprocess
+import os
 
 # Carregar a planilha enviada
 input_file = 'dados_planilha.xlsx'
@@ -59,34 +60,11 @@ df_final['Dep'] = criador  # Criador sem aspas
 df_final['OU'] = destino  # Destino sem aspas
 df_final['Pass'] = df['Senha']  # Senha
 
-# Criar um objeto StringIO para armazenar os dados em formato CSV
-output = io.StringIO()
+# Escrever os dados em um arquivo CSV temporário
+temp_csv_file = 'temp_data.csv'
+df_final.to_csv(temp_csv_file, index=False)
 
-# Escrever o cabeçalho
-header = 'Nome,Dn,PrimeiroNome,Sobrenome,Conta,Email,Desc,Office,Dep,OU,Pass\n'
-output.write(header)
-
-# Escrever os dados
-for _, row in df_final.iterrows():
-    line = (
-        f'"{row["Nome"]}",'
-        f'"{row["Dn"]}",'
-        f'{row["PrimeiroNome"]},'
-        f'{row["Sobrenome"]},'
-        f'{row["Conta"]},'
-        f'{row["Email"]},'
-        f'{row["Desc"]},'
-        f'"{row["Office"]}",'
-        f'{row["Dep"]},'
-        f'"{row["OU"]}",'
-        f'"{row["Pass"]}"\n'
-    )
-    output.write(line)
-
-# Obter o conteúdo CSV como string
-csv_data = output.getvalue()
-
-# Passar os dados CSV para o script PowerShell
+# Passar o caminho do arquivo para o script PowerShell
 script_powershell = 'arquivo_powershell.ps1'
 
 try:
@@ -94,7 +72,7 @@ try:
         "powershell",
         "-ExecutionPolicy", "Bypass",
         "-File", script_powershell,
-        "-Data", csv_data  # Passando os dados CSV
+        "-DataFile", temp_csv_file  # Passando o caminho do arquivo
     ], capture_output=True, text=True)
 
     # Exibir a saída do script
@@ -108,3 +86,7 @@ try:
 
 except Exception as e:
     print(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
+
+# Remover o arquivo temporário
+os.remove(temp_csv_file)
+
