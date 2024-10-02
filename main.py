@@ -45,7 +45,7 @@ df['E-mail'] = df['RA'].apply(lambda x: str(x).zfill(8) + dominio)
 
 # Criar a coluna personalizada conforme solicitado
 df['Descrição Completa'] = df['ALUNO'].str.upper() + ' - ' + office
-
+O 
 # Montar a estrutura de saída conforme solicitado
 df_final = pd.DataFrame()
 df_final['Nome'] = df['ALUNO'].str.upper()  # Nome em maiúsculas
@@ -54,7 +54,7 @@ df_final['PrimeiroNome'] = df['Primeiro Nome']  # Primeiro nome já em maiúscul
 df_final['Sobrenome'] = df['Sobrenome']  # Sobrenome já em maiúsculas
 df_final['Conta'] = df['RA'].apply(lambda x: str(x).zfill(8))  # RA com 8 dígitos
 df_final['Email'] = df['E-mail']
-df_final['Desc'] = 0  # Fixo para 0
+df_final['Desc'] = df['CPF']  # Fixo para 0
 df_final['Office'] = office  # Office sem aspas
 df_final['Dep'] = criador  # Criador sem aspas
 df_final['OU'] = destino  # Destino sem aspas
