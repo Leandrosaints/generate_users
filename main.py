@@ -1,8 +1,9 @@
 import pandas as pd
+import io
+import subprocess
 
 # Carregar a planilha enviada
 input_file = 'dados_planilha.xlsx'
-output_file = 'resultado.csv'
 
 # Variáveis fixas para as colunas adicionais
 dominio = "@alunosenai.mt"
@@ -25,7 +26,7 @@ df = df.dropna(subset=['RA', 'ALUNO'])
 
 # Função para gerar a senha a partir do RA
 def gerar_senha(ra):
-    return ra[2:]  # Remove os dois primeiros caracteres do RA
+    return ra[2:]  # Mantém apenas os últimos 4 dígitos do RA
 
 # Função para separar o primeiro nome e o restante
 def separar_nome(nome_completo):
@@ -58,27 +59,52 @@ df_final['Dep'] = criador  # Criador sem aspas
 df_final['OU'] = destino  # Destino sem aspas
 df_final['Pass'] = df['Senha']  # Senha
 
-# Criar a saída CSV com as aspas corretas
-with open(output_file, 'w', encoding='utf-8') as file:
-    # Escrevendo o cabeçalho
-    header = 'Nome,Dn,PrimeiroNome,Sobrenome,Conta,Email,Desc,Office,Dep,OU,Pass\n'
-    file.write(header)
+# Criar um objeto StringIO para armazenar os dados em formato CSV
+output = io.StringIO()
 
-    # Escrevendo os dados
-    for _, row in df_final.iterrows():
-        line = (
-            f'"{row["Nome"]}",'
-            f'"{row["Dn"]}",'
-            f'{row["PrimeiroNome"]},'
-            f'{row["Sobrenome"]},'
-            f'{row["Conta"]},'
-            f'{row["Email"]},'
-            f'{row["Desc"]},'
-            f'"{row["Office"]}",'
-            f'{row["Dep"]},'
-            f'"{row["OU"]}",'
-            f'"{row["Pass"]}"\n'
-        )
-        file.write(line)
+# Escrever o cabeçalho
+header = 'Nome,Dn,PrimeiroNome,Sobrenome,Conta,Email,Desc,Office,Dep,OU,Pass\n'
+output.write(header)
 
-print(f'Arquivo gerado com sucesso: {output_file}')
+# Escrever os dados
+for _, row in df_final.iterrows():
+    line = (
+        f'"{row["Nome"]}",'
+        f'"{row["Dn"]}",'
+        f'{row["PrimeiroNome"]},'
+        f'{row["Sobrenome"]},'
+        f'{row["Conta"]},'
+        f'{row["Email"]},'
+        f'{row["Desc"]},'
+        f'"{row["Office"]}",'
+        f'{row["Dep"]},'
+        f'"{row["OU"]}",'
+        f'"{row["Pass"]}"\n'
+    )
+    output.write(line)
+
+# Obter o conteúdo CSV como string
+csv_data = output.getvalue()
+
+# Passar os dados CSV para o script PowerShell
+script_powershell = 'arquivo_powershell.ps1'
+
+try:
+    result = subprocess.run([
+        "powershell",
+        "-ExecutionPolicy", "Bypass",
+        "-File", script_powershell,
+        "-Data", csv_data  # Passando os dados CSV
+    ], capture_output=True, text=True)
+
+    # Exibir a saída do script
+    print("Saída do PowerShell:")
+    print(result.stdout)
+
+    # Se houver algum erro, ele será capturado
+    if result.stderr:
+        print("Erro ao executar o script PowerShell:")
+        print(result.stderr)
+
+except Exception as e:
+    print(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
