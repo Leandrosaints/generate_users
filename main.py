@@ -1,111 +1,148 @@
+import streamlit as st
 import pandas as pd
 import subprocess
 
-# Carregar a planilha enviada
-input_file = 'PLANILHA_PADRAO.xlsx'
-output_file = 'resultado.csv'
+# Configurar a página do Streamlit
+st.set_page_config(page_title="Gerenciamento de Planilhas", layout="wide")
 
-# Variáveis fixas para as colunas adicionais
-dominio = "@alunosenai.mt"
-office = "SENAI - Nova Mutum/MT"
-criador = "Criado por Jeferson Silva"
-destino = "OU=QUA.415.089 ASSISTENTE DE RECURSOS HUMANOS COM INFORMÁTICA,OU=CURSOS,OU=SENAINMT,OU=SENAI,OU=SFIEMT-EDU,DC=SESISENAIMT,DC=EDU"
+# Estilo CSS personalizado para melhorar a aparência
+st.markdown("""
+    <style>
+    .main {
+        background-color:#959595;
+        padding: 20px;
+        border-radius: 8px;
+    }
+    .stButton > button {
+        background-color: #007BFF;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 20px;
+        cursor: pointer;
+    }
+    .stButton > button:hover {
+        background-color: #0056b3;
+    }
+    .legend {
+        font-weight: bold;
+        margin-bottom: 5px;
+        margin-top: 15px;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
-# Ler a planilha
-df = pd.read_excel(input_file)
+# Título da aplicação
+st.title("📊 Gerenciamento de Planilhas de Alunos")
+st.subheader("Organize e processe suas planilhas de forma rápida e eficiente")
 
-# Ajustar os nomes das colunas conforme a estrutura da planilha
-df.columns = ['TURMA', 'RA', 'ALUNO', 'CPF', 'USUÁRIO', 'SENHA', 'E-MAIL / OFFICE 365']
+# Dividir a interface em três colunas
+col1, col2, col3 = st.columns([1, 2, 1])
 
-# Remover a linha que corresponde ao cabeçalho antigo, caso esteja presente nos dados
-df = df[~df['RA'].astype(str).str.contains('RA', case=False)]
-df = df[~df['ALUNO'].astype(str).str.contains('ALUNO', case=False)]
+with col1:
+    st.header("Upload da Planilha")
+    uploaded_file = st.file_uploader("Carregue a planilha de alunos (.xlsx)", type="xlsx")
 
-# Remover outras linhas em branco ou com dados faltantes (se necessário)
-df = df.dropna(subset=['RA', 'ALUNO'])
+with col2:
+    st.header("Configurações")
 
-# Função para gerar a senha a partir do RA
-def gerar_senha(ra):
-    return ra[2:]  # Remove os dois primeiros caracteres do RA
+    # Criar colunas internas para alinhar os campos de entrada lado a lado
+    col2_1, col2_2 = st.columns(2)
 
-# Função para separar o primeiro nome e o restante
-def separar_nome(nome_completo):
-    partes = nome_completo.split(' ', 1)  # Limitar a divisão ao primeiro espaço
-    primeiro_nome = partes[0].upper()  # Primeiro nome em maiúsculas
-    sobrenome = partes[1].upper() if len(partes) > 1 else ''  # Sobrenome em maiúsculas
-    return primeiro_nome, sobrenome
+    with col2_1:
+        st.markdown('<div class="legend">Domínio de E-mail</div>', unsafe_allow_html=True)
+        dominio = st.text_input("", value="@alunosenai.mt", key="dominio")
 
-# Aplicar a função para gerar a senha e adicionar colunas extras
-df['Senha'] = df['RA'].apply(lambda x: gerar_senha(str(x)))
-df['Primeiro Nome'], df['Sobrenome'] = zip(*df['ALUNO'].apply(separar_nome))
+        st.markdown('<div class="legend">Criador</div>', unsafe_allow_html=True)
+        criador = st.text_input("", value="Criado por Jeferson Silva", key="criador")
 
-# Criar o e-mail a partir do RA
-df['E-mail'] = df['RA'].apply(lambda x: str(x).zfill(8) + dominio)
+    with col2_2:
+        st.markdown('<div class="legend">Office</div>', unsafe_allow_html=True)
+        office = st.text_input("", value="SENAI - Nova Mutum/MT", key="office")
 
-# Criar a coluna personalizada conforme solicitado
-df['Descrição Completa'] = df['ALUNO'].str.upper() + ' - ' + office
+        st.markdown('<div class="legend">Destino OU</div>', unsafe_allow_html=True)
+        destino = st.text_area("", value="OU=QUA.415.089 ASSISTENTE DE RECURSOS HUMANOS COM INFORMÁTICA,OU=CURSOS,OU=SENAINMT,OU=SENAI,OU=SFIEMT-EDU,DC=SESISENAIMT,DC=EDU", key="destino")
 
-# Montar a estrutura de saída conforme solicitado
-df_final = pd.DataFrame()
-df_final['Nome'] = df['ALUNO'].str.upper()  # Nome em maiúsculas
-df_final['Dn'] = df['Descrição Completa']  # Descrição
-df_final['PrimeiroNome'] = df['Primeiro Nome']  # Primeiro nome já em maiúsculas
-df_final['Sobrenome'] = df['Sobrenome']  # Sobrenome já em maiúsculas
-df_final['Conta'] = df['RA'].apply(lambda x: str(x).zfill(8))  # RA com 8 dígitos
-df_final['Email'] = df['E-mail']
-df_final['Desc'] = df['CPF']  # Fixo para 0
-df_final['Office'] = office  # Office sem aspas
-df_final['Dep'] = criador  # Criador sem aspas
-df_final['OU'] = destino  # Destino sem aspas
-df_final['Pass'] = df['Senha']  # Senha
+with col3:
+    st.header("Ações")
+    st.write("Escolha as ações para processar a planilha e executar scripts.")
 
-# Criar a saída CSV com as aspas corretas
-with open(output_file, 'w', encoding='utf-8') as file:
-    # Escrevendo o cabeçalho
-    header = 'Nome,Dn,PrimeiroNome,Sobrenome,Conta,Email,Desc,Office,Dep,OU,Pass\n'
-    file.write(header)
+    # Botão para processar a planilha
+    if st.button("📥 Processar Planilha e Gerar CSV"):
+        if uploaded_file is not None:
+            # Ler a planilha enviada pelo usuário
+            df = pd.read_excel(uploaded_file)
 
-    # Escrevendo os dados
-    for _, row in df_final.iterrows():
-        line = (
-            f'"{row["Nome"]}",'
-            f'"{row["Dn"]}",'
-            f'{row["PrimeiroNome"]},'
-            f'{row["Sobrenome"]},'
-            f'{row["Conta"]},'
-            f'{row["Email"]},'
-            f'{row["Desc"]},'
-            f'"{row["Office"]}",'
-            f'{row["Dep"]},'
-            f'"{row["OU"]}",'
-            f'"{row["Pass"]}"\n'
-        )
-        file.write(line)
+            # Ajustar os nomes das colunas conforme a estrutura da planilha
+            df.columns = ['TURMA', 'RA', 'ALUNO', 'CPF', 'USUÁRIO', 'SENHA', 'E-MAIL / OFFICE 365']
 
-# Definir se o PowerShell será executado
-execute = True  # Altere para True para executar o PowerShell
+            # Remover linhas desnecessárias
+            df = df[~df['RA'].astype(str).str.contains('RA', case=False)]
+            df = df[~df['ALUNO'].astype(str).str.contains('ALUNO', case=False)]
+            df = df.dropna(subset=['RA', 'ALUNO'])
 
-if execute:
-    script_powershell = 'arquivo_powershell.ps1'
+            # Funções para gerar senha e separar nome
+            def gerar_senha(ra):
+                return ra[2:]
 
-    try:
-        # Executar o script PowerShell
-        result = subprocess.run([
-            "powershell",
-            "-ExecutionPolicy", "Bypass",
-            "-File", script_powershell
-        ], capture_output=True, text=True)
+            def separar_nome(nome_completo):
+                partes = nome_completo.split(' ', 1)
+                primeiro_nome = partes[0].upper()
+                sobrenome = partes[1].upper() if len(partes) > 1 else ''
+                return primeiro_nome, sobrenome
 
-        # Exibir a saída do script PowerShell
-        print("Saída do PowerShell:")
-        print(result.stdout)
+            # Aplicar funções e adicionar colunas
+            df['Senha'] = df['RA'].apply(lambda x: gerar_senha(str(x)))
+            df['Primeiro Nome'], df['Sobrenome'] = zip(*df['ALUNO'].apply(separar_nome))
+            df['E-mail'] = df['RA'].apply(lambda x: str(x).zfill(8) + dominio)
+            df['Descrição Completa'] = df['ALUNO'].str.upper() + ' - ' + office
 
-        # Se houver algum erro, ele será capturado
-        if result.stderr:
-            print("Erro ao executar o script PowerShell:")
-            print(result.stderr)
+            # Criar DataFrame final
+            df_final = pd.DataFrame()
+            df_final['Nome'] = df['ALUNO'].str.upper()
+            df_final['Dn'] = df['Descrição Completa']
+            df_final['PrimeiroNome'] = df['Primeiro Nome']
+            df_final['Sobrenome'] = df['Sobrenome']
+            df_final['Conta'] = df['RA'].apply(lambda x: str(x).zfill(8))
+            df_final['Email'] = df['E-mail']
+            df_final['Desc'] = df['CPF']
+            df_final['Office'] = office
+            df_final['Dep'] = criador
+            df_final['OU'] = destino
+            df_final['Pass'] = df['Senha']
 
-    except Exception as e:
-        print(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
-else:
-    print("Nenhum dado encontrado. O script PowerShell não será executado.")
+            # Salvar o DataFrame final em um arquivo CSV
+            output_file = 'resultado.csv'
+            df_final.to_csv(output_file, index=False, quotechar='"')
+
+            st.success('CSV gerado com sucesso!')
+
+            # Link para download do arquivo CSV
+            st.download_button(
+                label="Baixar CSV gerado",
+                data=open(output_file, 'rb').read(),
+                file_name=output_file,
+                mime='text/csv'
+            )
+        else:
+            st.error("Por favor, carregue uma planilha válida.")
+
+    # Botão para executar o script PowerShell
+    if st.button("⚡ Executar Script PowerShell"):
+        script_powershell = 'arquivo_powershell.ps1'
+
+        try:
+            result = subprocess.run(
+                ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_powershell],
+                capture_output=True, text=True
+            )
+
+            # Exibir a saída do script PowerShell
+            st.text("Saída do PowerShell:")
+            st.code(result.stdout)
+
+            # Exibir erros, se houver
+            if result.stderr:
+                st.error(f"Erro ao executar o script PowerShell:\n{result.stderr}")
+        except Exception as e:
+            st.error(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
