@@ -1,148 +1,196 @@
 import streamlit as st
 import pandas as pd
 import subprocess
+import os
 
-# Configurar a página do Streamlit
-st.set_page_config(page_title="Gerenciamento de Planilhas", layout="wide")
+# Configuração da página
+st.set_page_config(page_title="Gerador de Usuários", layout="wide")
 
-# Estilo CSS personalizado para melhorar a aparência
-st.markdown("""
+# Estilização do container com CSS para bordas, background e formatação
+st.markdown(
+    """
     <style>
-    .main {
-        background-color:#959595;
-        padding: 20px;
-        border-radius: 8px;
+        h1 {
+        font-family: "Source Sans Pro", sans-serif;
+        font-weight: 700;
+        text-align: center;
+        color: rgb(49, 51, 63);
+        padding: 1.25rem 0px 0px;
+        margin: 0px;
+        line-height: 1.2;
     }
-    .stButton > button {
-        background-color: #007BFF;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 10px 20px;
-        cursor: pointer;
+      h5 {
+        font-family: "Source Sans Pro", sans-serif;
+
+        text-align: center;
+        color: rgb(49, 51, 63);
+        padding: 1.25rem 0px 1rem;
+        margin: 0px;
+
     }
-    .stButton > button:hover {
-        background-color: #0056b3;
+    .styled-container {
+        background-color: #f9f9f9;  /* Cor de fundo suave */
+        border: 1px solid #ddd;  /* Bordas sutis */
+        border-radius: 8px;  /* Cantos arredondados */
+        padding: 20px;  /* Espaçamento interno */
+        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);  /* Sombra leve */
+        margin-top: 20px;  /* Espaçamento do topo */
     }
-    .legend {
+
+    .st-emotion-cache-1r4qj8v {
+        position: absolute;
+        background:#7997a10f;
+        color: rgb(49, 51, 63);
+        inset: 0px;
+        color-scheme: light;
+        overflow: hidden;
+    }
+    .input-container {
+        display: flex;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    .input-container label {
+        width: 150px;
         font-weight: bold;
-        margin-bottom: 5px;
-        margin-top: 15px;
+        color: #333;
+    }
+    .stTextInput > div > input {
+        border: 1px solid #ccc;
+        padding: 5px;
+        width: 100%;
     }
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
 
-# Título da aplicação
-st.title("📊 Gerenciamento de Planilhas de Alunos")
-st.subheader("Organize e processe suas planilhas de forma rápida e eficiente")
+# Seção principal dentro de um container estilizado
+with st.container():
+    st.markdown("<h1>GenServ - Gerador de Usuário Interno</h1>", unsafe_allow_html=True)
+    st.markdown("<h5>Preencha as informações necessárias para gerar os usuários no servidor:</h5>",
+                unsafe_allow_html=True)
 
-# Dividir a interface em três colunas
-col1, col2, col3 = st.columns([1, 2, 1])
+    col1, col2 = st.columns(2)
 
-with col1:
-    st.header("Upload da Planilha")
-    uploaded_file = st.file_uploader("Carregue a planilha de alunos (.xlsx)", type="xlsx")
+    with col1:
+        st.markdown("### Configurações Gerais")
+        st.markdown('<div class="input-container"><label>Domínio de E-mail</label></div>', unsafe_allow_html=True)
+        dominio = st.text_input("", value="@alunosenai.mt", label_visibility="collapsed")
 
-with col2:
-    st.header("Configurações")
+        st.markdown('<div class="input-container"><label>Office</label></div>', unsafe_allow_html=True)
+        office = st.text_input("", value="SENAI - Nova Mutum/MT", label_visibility="collapsed")
 
-    # Criar colunas internas para alinhar os campos de entrada lado a lado
-    col2_1, col2_2 = st.columns(2)
+        st.markdown('<div class="input-container"><label>Criador</label></div>', unsafe_allow_html=True)
+        criador = st.text_input("", value="Criado por Jeferson Silva", label_visibility="collapsed")
 
-    with col2_1:
-        st.markdown('<div class="legend">Domínio de E-mail</div>', unsafe_allow_html=True)
-        dominio = st.text_input("", value="@alunosenai.mt", key="dominio")
+        st.markdown('<div class="input-container"><label>Destino</label></div>', unsafe_allow_html=True)
+        destino = st.text_input("",
+                                value="OU=QUA.415.089 ASSISTENTE DE RECURSOS HUMANOS COM INFORMÁTICA,OU=CURSOS,OU=SENAINMT,OU=SENAI,OU=SFIEMT-EDU,DC=SESISENAIMT,DC=EDU",
+                                label_visibility="collapsed")
 
-        st.markdown('<div class="legend">Criador</div>', unsafe_allow_html=True)
-        criador = st.text_input("", value="Criado por Jeferson Silva", key="criador")
+    with col2:
+        st.markdown("### Arquivo de Entrada")
+        st.markdown('<div class="input-container"><label>Planilha usuarios (.xlsx)</label></div>',
+                    unsafe_allow_html=True)
+        input_file = st.file_uploader("", type="xlsx", label_visibility="collapsed")
 
-    with col2_2:
-        st.markdown('<div class="legend">Office</div>', unsafe_allow_html=True)
-        office = st.text_input("", value="SENAI - Nova Mutum/MT", key="office")
+        st.markdown('<div class="input-container"><label>Nome do Arquivo de Saída</label></div>',
+                    unsafe_allow_html=True)
 
-        st.markdown('<div class="legend">Destino OU</div>', unsafe_allow_html=True)
-        destino = st.text_area("", value="OU=QUA.415.089 ASSISTENTE DE RECURSOS HUMANOS COM INFORMÁTICA,OU=CURSOS,OU=SENAINMT,OU=SENAI,OU=SFIEMT-EDU,DC=SESISENAIMT,DC=EDU", key="destino")
+        output_file = 'resultado.csv'
 
-with col3:
-    st.header("Ações")
-    st.write("Escolha as ações para processar a planilha e executar scripts.")
+        st.markdown('<div class="input-container"><label>Executar PowerShell</label></div>', unsafe_allow_html=True)
+        execute = st.checkbox("Executar PowerShell após a geração?", value=False)
+        # Disponibilizar o arquivo para download
 
-    # Botão para processar a planilha
-    if st.button("📥 Processar Planilha e Gerar CSV"):
-        if uploaded_file is not None:
-            # Ler a planilha enviada pelo usuário
-            df = pd.read_excel(uploaded_file)
 
-            # Ajustar os nomes das colunas conforme a estrutura da planilha
-            df.columns = ['TURMA', 'RA', 'ALUNO', 'CPF', 'USUÁRIO', 'SENHA', 'E-MAIL / OFFICE 365']
 
-            # Remover linhas desnecessárias
-            df = df[~df['RA'].astype(str).str.contains('RA', case=False)]
-            df = df[~df['ALUNO'].astype(str).str.contains('ALUNO', case=False)]
-            df = df.dropna(subset=['RA', 'ALUNO'])
+    # Processamento
+if input_file and st.button("Gerar Usuários"):
+    # Ler a planilha
+    df = pd.read_excel(input_file)
 
-            # Funções para gerar senha e separar nome
-            def gerar_senha(ra):
-                return ra[2:]
+    # Ajustar os nomes das colunas conforme a estrutura da planilha
+    df.columns = ['TURMA', 'RA', 'ALUNO', 'CPF', 'USUÁRIO', 'SENHA', 'E-MAIL / OFFICE 365']
 
-            def separar_nome(nome_completo):
-                partes = nome_completo.split(' ', 1)
-                primeiro_nome = partes[0].upper()
-                sobrenome = partes[1].upper() if len(partes) > 1 else ''
-                return primeiro_nome, sobrenome
+    # Remover linhas indesejadas e processar os dados conforme necessário
+    df = df[~df['RA'].astype(str).str.contains('RA', case=False)]
+    df = df[~df['ALUNO'].astype(str).str.contains('ALUNO', case=False)]
+    df = df.dropna(subset=['RA', 'ALUNO'])
 
-            # Aplicar funções e adicionar colunas
-            df['Senha'] = df['RA'].apply(lambda x: gerar_senha(str(x)))
-            df['Primeiro Nome'], df['Sobrenome'] = zip(*df['ALUNO'].apply(separar_nome))
-            df['E-mail'] = df['RA'].apply(lambda x: str(x).zfill(8) + dominio)
-            df['Descrição Completa'] = df['ALUNO'].str.upper() + ' - ' + office
 
-            # Criar DataFrame final
-            df_final = pd.DataFrame()
-            df_final['Nome'] = df['ALUNO'].str.upper()
-            df_final['Dn'] = df['Descrição Completa']
-            df_final['PrimeiroNome'] = df['Primeiro Nome']
-            df_final['Sobrenome'] = df['Sobrenome']
-            df_final['Conta'] = df['RA'].apply(lambda x: str(x).zfill(8))
-            df_final['Email'] = df['E-mail']
-            df_final['Desc'] = df['CPF']
-            df_final['Office'] = office
-            df_final['Dep'] = criador
-            df_final['OU'] = destino
-            df_final['Pass'] = df['Senha']
+    # Função para gerar a senha a partir do RA
+    def gerar_senha(ra):
+        return ra[2:]  # Remove os dois primeiros caracteres do RA
 
-            # Salvar o DataFrame final em um arquivo CSV
-            output_file = 'resultado.csv'
-            df_final.to_csv(output_file, index=False, quotechar='"')
 
-            st.success('CSV gerado com sucesso!')
+    # Função para separar o primeiro nome e o restante
+    def separar_nome(nome_completo):
+        partes = nome_completo.split(' ', 1)
+        primeiro_nome = partes[0].upper()
+        sobrenome = partes[1].upper() if len(partes) > 1 else ''
+        return primeiro_nome, sobrenome
 
-            # Link para download do arquivo CSV
-            st.download_button(
-                label="Baixar CSV gerado",
-                data=open(output_file, 'rb').read(),
-                file_name=output_file,
-                mime='text/csv'
-            )
-        else:
-            st.error("Por favor, carregue uma planilha válida.")
 
-    # Botão para executar o script PowerShell
-    if st.button("⚡ Executar Script PowerShell"):
+    # Aplicar funções para gerar dados adicionais
+    df['Senha'] = df['RA'].apply(lambda x: gerar_senha(str(x)))
+    df['Primeiro Nome'], df['Sobrenome'] = zip(*df['ALUNO'].apply(separar_nome))
+    df['E-mail'] = df['RA'].apply(lambda x: str(x).zfill(8) + dominio)
+    df['Descrição Completa'] = df['ALUNO'].str.upper() + ' - ' + office
+
+    # Montar a estrutura de saída conforme solicitado
+    df_final = pd.DataFrame()
+    df_final['Nome'] = df['ALUNO'].str.upper()
+    df_final['Dn'] = df['Descrição Completa']
+    df_final['PrimeiroNome'] = df['Primeiro Nome']
+    df_final['Sobrenome'] = df['Sobrenome']
+    df_final['Conta'] = df['RA'].apply(lambda x: str(x).zfill(8))
+    df_final['Email'] = df['E-mail']
+    df_final['Desc'] = df['CPF']
+    df_final['Office'] = office
+    df_final['Dep'] = criador
+    df_final['OU'] = destino
+    df_final['Pass'] = df['Senha']
+
+    # Salvar automaticamente o arquivo CSV
+    df_final.to_csv(output_file, index=False)
+
+    st.success(f"Arquivo {output_file} gerado com sucesso!")
+
+    # Executar o script PowerShell se selecionado
+    if execute:
         script_powershell = 'arquivo_powershell.ps1'
-
         try:
             result = subprocess.run(
                 ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_powershell],
                 capture_output=True, text=True
             )
 
-            # Exibir a saída do script PowerShell
             st.text("Saída do PowerShell:")
-            st.code(result.stdout)
+            st.text(result.stdout)
 
-            # Exibir erros, se houver
             if result.stderr:
-                st.error(f"Erro ao executar o script PowerShell:\n{result.stderr}")
+                st.error("Erro ao executar o script PowerShell:")
+                st.error(result.stderr)
         except Exception as e:
             st.error(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
+    with open(output_file, 'rb') as file:
+        btn = st.download_button(
+            label="Baixar arquivo CSV",
+            data=file,
+            file_name=output_file,
+            mime='text/csv'
+        )
+
+st.markdown("---")  # Linha divisória
+
+# Adiciona uma barra de desenvolvedor no rodapé da página
+st.markdown(
+    """
+    <div style='text-align: center; color: gray; margin-top: 10px;'>
+        Desenvolvido por <strong>Saints Technology</strong> - 2024
+    </div>
+    """,
+    unsafe_allow_html=True
+)
