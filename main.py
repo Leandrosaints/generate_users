@@ -163,9 +163,11 @@ if input_file and st.button("Gerar Usuários"):
         script_powershell = 'arquivo_powershell.ps1'
         try:
             result = subprocess.run(
-                ["powershell", "-ExecutionPolicy", "Bypass", "-File", script_powershell],
-                capture_output=True, text=True
-            )
+        ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-ExecutionPolicy", "Bypass", "-File", script_powershell],
+        capture_output=True, text=True
+    )
+
+
 
             st.text("Saída do PowerShell:")
             st.text(result.stdout)
