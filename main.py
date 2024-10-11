@@ -1,7 +1,21 @@
 import streamlit as st
 import pandas as pd
 import subprocess
-import os
+
+
+
+
+def executar_comando(comando):
+    try:
+        result = subprocess.run(
+            comando,
+            capture_output=True, text=True, shell=True
+        )
+        return result.stdout, result.stderr
+    except Exception as e:
+        return "", str(e)
+
+
 
 # Configuração da página
 st.set_page_config(page_title="Gerador de Usuários", layout="wide")
@@ -160,23 +174,19 @@ if input_file and st.button("Gerar Usuários"):
 
     # Executar o script PowerShell se selecionado
     if execute:
+        # Executar o script PowerShell se selecionado
         script_powershell = 'arquivo_powershell.ps1'
-        try:
-            result = subprocess.run(
-        ["C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe", "-ExecutionPolicy", "Bypass", "-File", script_powershell],
-        capture_output=True, text=True
-    )
+        comando = f'powershell -ExecutionPolicy Bypass -File {script_powershell}'
+        stdout, stderr = executar_comando(comando)
 
+        # Exibir a saída
+        st.text("Saída do PowerShell:")
+        st.text(stdout)
 
+        if stderr:
+            st.error("Erro ao executar o script PowerShell:")
+            st.error(stderr)
 
-            st.text("Saída do PowerShell:")
-            st.text(result.stdout)
-
-            if result.stderr:
-                st.error("Erro ao executar o script PowerShell:")
-                st.error(result.stderr)
-        except Exception as e:
-            st.error(f"Ocorreu um erro ao tentar executar o script PowerShell: {e}")
     with open(output_file, 'rb') as file:
         btn = st.download_button(
             label="Baixar arquivo CSV",
