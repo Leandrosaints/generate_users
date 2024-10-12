@@ -19,6 +19,8 @@ def executar_comando(comando):
         return result.stdout, result.stderr
     except Exception as e:
         return "", str(e)
+
+
 class ExcelProcessor(QWidget):
     def __init__(self):
         super().__init__()
@@ -72,7 +74,11 @@ class ExcelProcessor(QWidget):
         self.dest_label.setFont(font)
         self.dest_input = QLineEdit('OU=QUA.415.089 ASSISTENTE DE RECURSOS HUMANOS...')
         self.dest_input.setFont(font)
-
+        # label info dev
+        self.label_info = QLabel("Desenvolvido por Saints Technology - 2024")
+        self.label_info.setFont(font)
+        self.label_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # button processar dados to .csv
         self.process_button = QPushButton('Processar')
         self.process_button.setFont(font)
         self.process_button.clicked.connect(self.process_file)
@@ -81,9 +87,11 @@ class ExcelProcessor(QWidget):
         self.powershell_button = QPushButton('Executar PowerShell')
         self.powershell_button.setFont(font)
         self.powershell_button.clicked.connect(self.run_powershell)
-        self.label_info = QLabel("Desenvolvido por Saints Technology - 2024")
-        self.label_info.setFont(font)
-        self.label_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self.add_command_button = QPushButton('add .ps1')
+        self.add_command_button.setFont(font)
+        self.add_command_button.clicked.connect(self.add_powershell_script)
+
         # Adicionar widgets ao layout
         layout.addWidget(self.file_label, 0, 0)
         layout.addWidget(self.file_input, 0, 1)
@@ -103,12 +111,29 @@ class ExcelProcessor(QWidget):
 
         layout.addWidget(self.process_button, 5, 0, 1, 3)
         layout.addWidget(self.powershell_button, 6, 0, 1, 3)
-        layout.addWidget(self.label_info, 7, 0, 1, 3)
+        layout.addWidget(self.label_info, 8, 0, 1, 3)
 
-
+        layout.addWidget(self.add_command_button, 7, 0, 1, 3)
 
         # Estilizar o contêiner
         self.setStyleSheet(self.get_style())
+
+    def add_powershell_script(self):
+        file_dialog = QFileDialog()
+        ps_file_path, _ = file_dialog.getOpenFileName(self, 'Escolher Arquivo PowerShell', '',
+                                                      'PowerShell Files (*.ps1)')
+
+        if ps_file_path:
+            try:
+                comando = f'powershell -ExecutionPolicy Bypass -File "{ps_file_path}"'
+                stdout, stderr = executar_comando(comando)
+
+                if stderr:
+                    QMessageBox.critical(self, 'Erro', f'Erro ao executar o PowerShell: {stderr}')
+                else:
+                    QMessageBox.information(self, 'Sucesso', 'Script PowerShell executado com sucesso.')
+            except Exception as e:
+                QMessageBox.critical(self, 'Erro', f'Erro ao executar o script PowerShell: {e}')
 
     def get_style(self):
         """Define o estilo CSS para os widgets."""
@@ -120,9 +145,9 @@ class ExcelProcessor(QWidget):
                 padding: 10px;
             }
             QLabel {
-               
+
                 color: #333;
-               
+
             }
             QLineEdit {
                 background-color: white;
@@ -200,7 +225,7 @@ class ExcelProcessor(QWidget):
             df_final['Pass'] = df['Senha']
 
             output_file = 'resultado.csv'
-            #df_final.to_csv(output_file, index=False)
+            # df_final.to_csv(output_file, index=False)
 
             with open(output_file, 'w', encoding='utf-8') as file:
 
@@ -228,18 +253,28 @@ class ExcelProcessor(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao processar o arquivo: {e}')
 
-
     def run_powershell(self):
-        #ps_script_path = 'arquivo_powershell.ps1'  # Certifique-se de usar o caminho correto
         try:
-            script_powershell = 'arquivo_powershell.ps1'
-            comando = f'powershell -ExecutionPolicy Bypass -File {script_powershell}'
-            stdout, stderr = executar_comando(comando)
-        #print(stderr)
+            # Comando PowerShell a ser executado diretamente
+            comando = (
+                'powershell -ExecutionPolicy Bypass '
+                '-Command "Import-Csv .\\resultado.csv | '
+                'ForEach-Object {New-ADUser -Name $_.nome -DisplayName $_.dn -givenName $_.primeironome '
+                '-Surname $_.Sobrenome -SamAccountName $_.conta -UserPrincipalName $_.email -description $_.Desc '
+                '-Office $_.Office -Department $_.Dep -Path $_.ou '
+                '-AccountPassword (ConvertTo-SecureString -AsPlainText $_.pass -Force) -Enabled $true}"'
+            )
 
-            QMessageBox.information(self, 'Erro', f'Erro ao executar o PowerShell: {str(stderr)}')
-        except:
-            QMessageBox.warning(self, 'Erro', "Aplicaçao encontrou um erro!")
+            stdout, stderr = executar_comando(comando)
+
+            if stderr:
+                QMessageBox.critical(self, 'Erro', f'Erro ao executar o PowerShell: {stderr}')
+            else:
+                QMessageBox.information(self, 'Sucesso', 'Comando PowerShell executado com sucesso.')
+        except Exception as e:
+            QMessageBox.critical(self, 'Erro', f'Erro ao executar o comando PowerShell: {e}')
+
+
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = ExcelProcessor()
