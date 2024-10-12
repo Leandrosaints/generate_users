@@ -167,8 +167,7 @@ if input_file and st.button("Gerar Usuários"):
     df_final['OU'] = destino
     df_final['Pass'] = df['Senha']
 
-    # Salvar automaticamente o arquivo CSV
-    df_final.to_csv(output_file, index=False)
+
 
     st.success(f"Arquivo {output_file} gerado com sucesso!")
 
