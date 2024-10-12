@@ -10,11 +10,20 @@ from PyQt6.QtGui import QFont
 from PyQt6.QtCore import Qt
 
 
+def executar_comando(comando):
+    try:
+        result = subprocess.run(
+            comando,
+            capture_output=True, text=True, shell=True
+        )
+        return result.stdout, result.stderr
+    except Exception as e:
+        return "", str(e)
 class ExcelProcessor(QWidget):
     def __init__(self):
         super().__init__()
 
-        self.setWindowTitle('Processar Planilha')
+        self.setWindowTitle('GenServ')
         self.setGeometry(200, 200, 600, 400)
         self.setStyleSheet(self.get_style())
 
@@ -23,9 +32,10 @@ class ExcelProcessor(QWidget):
         self.setLayout(main_layout)
 
         # Adicionar título
-        title = QLabel('Processador de Planilhas Excel')
+        title = QLabel('GenServ - User Generation Tool for Servers')
         title.setFont(QFont('Arial', 16))
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
         main_layout.addWidget(title)
 
         # Criar layout grid para os campos de entrada
@@ -71,7 +81,9 @@ class ExcelProcessor(QWidget):
         self.powershell_button = QPushButton('Executar PowerShell')
         self.powershell_button.setFont(font)
         self.powershell_button.clicked.connect(self.run_powershell)
-
+        self.label_info = QLabel("Desenvolvido por Saints Technology - 2024")
+        self.label_info.setFont(font)
+        self.label_info.setAlignment(Qt.AlignmentFlag.AlignCenter)
         # Adicionar widgets ao layout
         layout.addWidget(self.file_label, 0, 0)
         layout.addWidget(self.file_input, 0, 1)
@@ -91,6 +103,9 @@ class ExcelProcessor(QWidget):
 
         layout.addWidget(self.process_button, 5, 0, 1, 3)
         layout.addWidget(self.powershell_button, 6, 0, 1, 3)
+        layout.addWidget(self.label_info, 7, 0, 1, 3)
+
+
 
         # Estilizar o contêiner
         self.setStyleSheet(self.get_style())
@@ -105,7 +120,9 @@ class ExcelProcessor(QWidget):
                 padding: 10px;
             }
             QLabel {
+               
                 color: #333;
+               
             }
             QLineEdit {
                 background-color: white;
@@ -211,14 +228,18 @@ class ExcelProcessor(QWidget):
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao processar o arquivo: {e}')
 
+
     def run_powershell(self):
-        """Executa um comando no PowerShell."""
+        #ps_script_path = 'arquivo_powershell.ps1'  # Certifique-se de usar o caminho correto
         try:
-            subprocess.run(['powershell', '-NoExit'], check=True)
-        except Exception as e:
-            QMessageBox.critical(self, 'Erro', f'Erro ao executar o PowerShell: {e}')
+            script_powershell = 'arquivo_powershell.ps1'
+            comando = f'powershell -ExecutionPolicy Bypass -File {script_powershell}'
+            stdout, stderr = executar_comando(comando)
+        #print(stderr)
 
-
+            QMessageBox.information(self, 'Erro', f'Erro ao executar o PowerShell: {str(stderr)}')
+        except:
+            QMessageBox.warning(self, 'Erro', "Aplicaçao encontrou um erro!")
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     window = ExcelProcessor()
