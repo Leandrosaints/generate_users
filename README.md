@@ -18,5 +18,5 @@ Este aplicativo desktop é desenvolvido em Python utilizando PyQt6 e Pandas. O o
 - **Geração de CSV**: Cria um arquivo CSV com os dados tratados.
 - **Execução de PowerShell**: Integração para executar scripts PowerShell diretamente do aplicativo.
 
-## Estrutura do Projeto
+
 
