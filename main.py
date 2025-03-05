@@ -3,12 +3,16 @@ import csv
 import json
 import re
 import subprocess
+import time
+
 import pandas as pd
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QFrame, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView, QDialog, QListWidget
+    QLabel, QLineEdit, QPushButton, QFrame, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem, QHeaderView,
+    QDialog, QListWidget, QRadioButton, QComboBox
 )
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QPixmap, QFont, QIcon, QMovie
 from openpyxl.reader.excel import load_workbook
 from text_unidecode import unidecode
@@ -48,6 +52,32 @@ class OUSelectionDialog(QDialog):
     def get_selected_ou(self):
         """Retorna a OU selecionada."""
         return self.ou_list.currentItem().text()
+class LoadingDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Carregando...")
+        self.setModal(True)  # Torna o diálogo modal
+        self.setFixedSize(300, 100)  # Tamanho fixo do diálogo
+
+        # Layout horizontal
+        layout = QHBoxLayout()
+
+        # Label para o texto
+        self.label = QLabel("Por favor, aguarde...", self)
+        #self.label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)  # Alinhamento do texto
+
+        # Label para o GIF de loading
+        self.loading_gif = QLabel(self)
+        self.movie = QMovie("src/gif_load.gif")  # Substitua pelo caminho do seu GIF
+        self.loading_gif.setMovie(self.movie)
+        self.movie.start()  # Inicia o GIF
+
+        # Adiciona os widgets ao layout
+        layout.addWidget(self.loading_gif)
+        layout.addWidget(self.label)
+
+        self.setLayout(layout)
+
 
 class ExcelProcessor(QMainWindow):
     def __init__(self):
@@ -56,7 +86,7 @@ class ExcelProcessor(QMainWindow):
         self.setWindowTitle("GenServ")
         self.setWindowIcon(QIcon("src/ico.ico"))
         self.setStyleSheet("background-color: #F0F0F0;")  # Fundo da janela
-
+        self.loading_dialog = LoadingDialog(self)
         # Atributo para armazenar o DataFrame final
         self.df_final = None
 
@@ -80,19 +110,20 @@ class ExcelProcessor(QMainWindow):
 
         # Adicionando botões à barra lateral
         self.btn_fetch_users = QPushButton("Buscar Usuários", self)
-        self.btn_export_duplicados = QPushButton("Exportar Duplicados", self)
         self.btn_mover_usuarios = QPushButton("Mover Usuários", self)
         self.btn_excluir_usuarios = QPushButton("Excluir Usuários", self)
         self.btn_process = QPushButton("Processar", self)
         self.btn_download = QPushButton("Baixar Planilha", self)
         self.btn_powershell_run = QPushButton("Executar PowerShell", self)
         self.btn_add_ps1 = QPushButton("Adicionar Script .ps1", self)
+        self.usuarios_selecionados = []
+        self.dict_remove = {}
 
         # Adiciona os botões à barra lateral
         for button in [
-            self.btn_fetch_users, self.btn_export_duplicados, self.btn_mover_usuarios,
-            self.btn_excluir_usuarios, self.btn_process, self.btn_download,
-            self.btn_powershell_run, self.btn_add_ps1
+            self.btn_process, self.btn_fetch_users, self.btn_mover_usuarios,
+            self.btn_excluir_usuarios, self.btn_powershell_run, self.btn_add_ps1,
+            self.btn_download,
         ]:
             button.setStyleSheet("""
                 QPushButton {
@@ -168,6 +199,22 @@ class ExcelProcessor(QMainWindow):
         self.busca_cpf_input.setPlaceholderText("Digite o CPF para buscar...")
         self.busca_cpf_input.textChanged.connect(self.filtrar_por_cpf)
 
+        # Opções de busca (Tabela ou AD)
+        self.opcao_busca_tabela_radio = QRadioButton("Buscar na Tabela", self)
+        self.opcao_busca_ad_radio = QRadioButton("Buscar no AD", self)
+        self.opcao_busca_tabela_radio.setChecked(True)  # Tabela selecionada por padrão
+
+        # Combo de filtros para busca no AD
+        self.filtro_ad_combo = QComboBox(self)
+        self.filtro_ad_combo.addItems(["CPF", "OU", "Nome", "E-mail", "Departamento", "Status"])
+        self.filtro_ad_combo.setVisible(False)  # Inicialmente oculto
+
+        # Layout para opções de busca
+        busca_opcoes_layout = QHBoxLayout()
+        busca_opcoes_layout.addWidget(self.opcao_busca_tabela_radio)
+        busca_opcoes_layout.addWidget(self.opcao_busca_ad_radio)
+        busca_opcoes_layout.addWidget(self.filtro_ad_combo)
+
         # Adiciona widgets ao layout direito
         self.right_layout.addWidget(self.file_label)
         self.right_layout.addWidget(self.file_input)
@@ -182,6 +229,7 @@ class ExcelProcessor(QMainWindow):
         self.right_layout.addWidget(self.dest_input)
         self.right_layout.addWidget(self.counter_label)
         self.right_layout.addWidget(self.busca_cpf_input)
+        self.right_layout.addLayout(busca_opcoes_layout)
 
         # Tabela para exibir usuários existentes no AD
         self.table_existing_users = QTableWidget(self)
@@ -195,7 +243,6 @@ class ExcelProcessor(QMainWindow):
 
         # Conecta os botões às funções
         self.btn_fetch_users.clicked.connect(self.fetch_existing_users)
-        self.btn_export_duplicados.clicked.connect(self.exportar_duplicados)
         self.btn_mover_usuarios.clicked.connect(self.mover_usuarios)
         self.btn_excluir_usuarios.clicked.connect(self.excluir_usuarios)
         self.btn_process.clicked.connect(self.process_file)
@@ -203,7 +250,14 @@ class ExcelProcessor(QMainWindow):
         self.btn_powershell_run.clicked.connect(self.run_powershell)
         self.btn_add_ps1.clicked.connect(self.add_powershell_script)
 
+        # Conecta a mudança de opção (Tabela ou AD) para mostrar/ocultar o combo de filtros
+        self.opcao_busca_ad_radio.toggled.connect(self.filtro_ad_combo.setVisible)
 
+    def show_loading_t(self):
+        self.loading_dialog.show()  # Exibe o diálogo como modal
+
+    def hide_loading_T(self):
+        self.loading_dialog.hide()  # Oculta o diálogo
 
     def show_loading(self):
         """Inicia a animação de loading."""
@@ -303,7 +357,7 @@ class ExcelProcessor(QMainWindow):
         return True
 
     def process_file(self):
-        self.show_loading()
+        self.show_loading_t()
         input_file = self.file_input.text()
         dominio = self.domain_input.text()
         office = self.office_input.text()
@@ -311,7 +365,7 @@ class ExcelProcessor(QMainWindow):
         destino = self.dest_input.text()
 
         if not self.validar_entradas():
-            self.hide_loading()
+            self.hide_loading_T()
             return
 
         try:
@@ -398,12 +452,25 @@ class ExcelProcessor(QMainWindow):
 
                 self.adicionar_dados_planilha(input_file)
                 QMessageBox.information(self, 'Sucesso', f'Arquivo salvo com sucesso em: {file_path}')
+                # Pergunta ao usuário se deseja buscar usuários duplicados
+                resposta = QMessageBox.question(
+                    self,
+                    'Buscar Usuários Duplicados',
+                    'Deseja fazer uma busca de usuários duplicados?',
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+
+                if resposta == QMessageBox.StandardButton.Yes:
+                    # Executa a função para buscar usuários duplicados
+                    self.fetch_existing_users()
+                else:
+                    QMessageBox.information(self, 'OK', 'Operação concluída.')
             else:
                 QMessageBox.warning(self, 'Aviso', 'Nenhum local foi selecionado para salvar o arquivo.')
 
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao processar o arquivo: {e}, verifique a estrutura da planilha!')
-        self.hide_loading()
+        self.hide_loading_T()
 
     def adicionar_dados_planilha(self, arquivo_excel):
         wb = load_workbook(arquivo_excel)
@@ -419,7 +486,7 @@ class ExcelProcessor(QMainWindow):
         wb.save(arquivo_excel)
 
     def run_powershell(self):
-        self.show_loading()
+        self.show_loading_t()
         try:
             # Abre uma caixa de diálogo para o usuário escolher o arquivo CSV
             file_dialog = QFileDialog()
@@ -453,18 +520,20 @@ class ExcelProcessor(QMainWindow):
                 QMessageBox.warning(self, 'Aviso', 'Nenhum arquivo CSV foi selecionado.')
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao executar o comando PowerShell: {e}')
-        self.hide_loading()
-
-    #from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox, QTableWidgetItem
-
-    #from PyQt6.QtWidgets import QTableWidgetItem, QHeaderView, QCheckBox, QWidget, QHBoxLayout
-    #from PyQt6.QtCore import Qt
+        self.hide_loading_T()
 
     def filtrar_por_cpf(self):
-        """Filtra a tabela com base no CPF digitado."""
+        """Filtra a tabela ou busca no AD com base no CPF digitado."""
         cpf_busca = self.busca_cpf_input.text().strip()  # Obtém o texto digitado
 
-        # Itera sobre todas as linhas da tabela
+        # Verifica onde o usuário deseja buscar (Tabela ou AD)
+        if self.opcao_busca_tabela_radio.isChecked():  # Busca na tabela
+            self.filtrar_na_tabela(cpf_busca)
+        elif self.opcao_busca_ad_radio.isChecked():  # Busca no AD
+            self.filtrar_no_ad(filtro='cpf', valor=cpf_busca)
+
+    def filtrar_na_tabela(self, cpf_busca):
+        """Filtra a tabela com base no CPF digitado."""
         for row in range(self.table_existing_users.rowCount()):
             cpf_tabela = self.table_existing_users.item(row, 1).text()  # Obtém o CPF da linha
             # Mostra ou oculta a linha com base no CPF digitado
@@ -473,10 +542,139 @@ class ExcelProcessor(QMainWindow):
             else:
                 self.table_existing_users.setRowHidden(row, True)  # Oculta a linha
 
+    def filtrar_no_ad(self, filtro, valor):
+        """Busca usuários no AD com base no filtro e valor especificados."""
+        usuarios = self.buscar_usuarios_ad(filtro=filtro, valor=valor)
+        if usuarios:
+            self.preencher_tabela_com_usuarios(usuarios)  # Preenche a tabela com os resultados
+        else:
+            QMessageBox.information(self, 'Informação', 'Nenhum usuário encontrado no AD.')
+
+    def buscar_usuarios_ad(self, filtro, valor, propriedades=None):
+        """
+        Busca usuários no Active Directory com base em um filtro e valor especificados,
+        e preenche a tabela com os resultados.
+        """
+        if propriedades is None:
+            propriedades = ["Name", "Description", "DistinguishedName"]
+
+        try:
+            self.show_loading_t()
+
+            # Define o filtro do PowerShell com base no tipo de busca
+            if filtro == 'cpf':
+                filtro_ps = f'Description -eq "{valor}"'
+            elif filtro == 'ou':
+                filtro_ps = f'DistinguishedName -like "*{valor}*"'
+            elif filtro == 'nome':
+                filtro_ps = f'Name -like "*{valor}*"'
+            elif filtro == 'email':
+                filtro_ps = f'UserPrincipalName -like "*{valor}*"'
+            elif filtro == 'departamento':
+                filtro_ps = f'Department -eq "{valor}"'
+            elif filtro == 'status':
+                filtro_ps = f'Enabled -eq {"$true" if valor else "$false"}'
+            else:
+                raise ValueError("Filtro inválido. Use 'cpf', 'ou', 'nome', 'email', 'departamento' ou 'status'.")
+
+            # Define as propriedades como uma string separada por vírgulas
+            propriedades_str = ",".join(propriedades)
+
+            # Monta o comando PowerShell com ConvertTo-Json
+            comando = (
+                f'powershell -ExecutionPolicy Bypass -Command '
+                f'"Get-ADUser -Filter \\"{filtro_ps}\\" -Properties {propriedades_str} | '
+                f'Select-Object {propriedades_str} | ConvertTo-Json"'
+            )
+
+            # Executa o comando
+            stdout, stderr = executar_comando(comando)
+
+            # Verifica se houve erro no comando
+            if stderr:
+                QMessageBox.critical(self, 'Erro', f'Erro ao buscar usuários: {stderr}')
+                return
+
+            # Verifica se a saída está vazia
+            if not stdout.strip():
+                QMessageBox.information(self, 'Informação', 'Nenhum usuário encontrado.')
+                return
+
+            # Converte a saída do PowerShell (JSON) em uma lista de dicionários
+            try:
+                usuarios = json.loads(stdout)
+                # Certifique-se de que 'usuarios' seja uma lista
+                if isinstance(usuarios, dict):  # Se for um único usuário, coloque-o em uma lista
+                    usuarios = [usuarios]
+                self.preencher_tabela_com_usuarios(usuarios)
+            except json.JSONDecodeError as e:
+                QMessageBox.critical(self, 'Erro', f'Erro ao processar a saída do PowerShell: {e}')
+                return
+
+        except Exception as e:
+            # Captura qualquer exceção e exibe uma mensagem de erro
+            QMessageBox.critical(self, 'Erro', f'Erro ao buscar usuários: {e}')
+
+        finally:
+            self.hide_loading_T()
+
+    def processar_saida_powershell(self, stdout):
+        """
+        Processa a saída do PowerShell (texto normal) e retorna uma lista de dicionários.
+        """
+        usuarios = []
+        linhas = stdout.strip().split('\n')
+
+        for linha in linhas:
+            # Divide a linha em colunas com base em espaços em branco
+            colunas = [coluna.strip() for coluna in linha.split() if coluna.strip()]
+            if len(colunas) >= 3:  # Verifica se há pelo menos 3 colunas (Nome, CPF, Localização)
+                usuario = {
+                    "Name": colunas[0],
+                    "Description": colunas[1],
+                    "DistinguishedName": " ".join(colunas[2:])  # Junta o restante como DistinguishedName
+                }
+                usuarios.append(usuario)
+
+        return usuarios
+
+    def preencher_tabela_com_usuarios(self, usuarios):
+        """Preenche a tabela com os usuários encontrados."""
+        self.table_existing_users.setRowCount(0)  # Limpa a tabela
+
+        # Configura as colunas da tabela
+        self.table_existing_users.setColumnCount(3)
+        self.table_existing_users.setHorizontalHeaderLabels(["Nome", "CPF (Descrição)", "Localização"])
+
+        # Verifica se a lista de usuários está vazia
+        if not usuarios:
+            QMessageBox.warning(self, 'Aviso', 'Nenhum usuário encontrado para exibir.')
+            return
+
+        # Preenche a tabela com os dados
+        for i, usuario in enumerate(usuarios):
+            nome = usuario.get('Name', '')
+            descricao = usuario.get('Description', '')
+            distinguished_name = usuario.get('DistinguishedName', '')
+
+            # Adiciona uma nova linha à tabela
+            self.table_existing_users.insertRow(i)
+            self.table_existing_users.setItem(i, 0, QTableWidgetItem(nome))
+            self.table_existing_users.setItem(i, 1, QTableWidgetItem(descricao))
+            self.table_existing_users.setItem(i, 2, QTableWidgetItem(distinguished_name))
+
+        # Ajusta a largura das colunas
+        self.table_existing_users.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+
+        # Habilita a seleção de linhas
+        self.table_existing_users.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table_existing_users.setSelectionMode(QTableWidget.SelectionMode.MultiSelection)
+
     def fetch_existing_users(self):
         """Busca usuários existentes no AD, compara com o CSV e exibe duplicados na tabela."""
-        self.show_loading()
+
         try:
+            self.show_loading_t()
             # Abre uma caixa de diálogo para o usuário escolher o arquivo CSV
             file_dialog = QFileDialog()
             csv_file_path, _ = file_dialog.getOpenFileName(
@@ -557,11 +755,12 @@ class ExcelProcessor(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao buscar usuários: {e}')
         finally:
-            self.hide_loading()
+            self.hide_loading_T()
 
 
     def listar_ous(self):
         """Lista todas as OUs disponíveis no AD."""
+        self.show_loading_t()
         comando = (
             'powershell -ExecutionPolicy Bypass -Command "'
             'Get-ADOrganizationalUnit -Filter * | Select-Object -ExpandProperty DistinguishedName'
@@ -571,50 +770,53 @@ class ExcelProcessor(QMainWindow):
 
         if stderr:
             QMessageBox.critical(self, 'Erro', f'Erro ao listar OUs: {stderr}')
+            self.hide_loading_T()
             return []
 
         # Processa a saída para obter a lista de OUs
         ous = [ou.strip() for ou in stdout.splitlines() if ou.strip()]
         return ous
 
-
     def adicionar_selecionados_a_lista(self):
         """
         Adiciona os usuários selecionados da tabela a uma lista.
 
-        :param table_existing_users: Tabela de usuários existentes (PyQt5/QTableWidget).
         :return: Lista de DistinguishedNames dos usuários selecionados.
         """
-        selecionados = self.table_existing_users.selectedItems()
-        if not selecionados:
-            print('Nenhum usuário selecionado.')
+        try:
+            selecionados = self.table_existing_users.selectedItems()
+            if not selecionados:
+                print('Nenhum usuário selecionado.')
+                return []
+
+            for row in set(item.row() for item in selecionados):
+                distinguished_name = self.table_existing_users.item(row, 2).text()  # Pega o DistinguishedName
+                self.usuarios_selecionados.append(distinguished_name)
+
+            # Exibe a mensagem de confirmação
+            QMessageBox.information(self, "Sucesso",
+                                    f'{len(self.usuarios_selecionados)} usuário(s) adicionados à lista.')
+
+            print(f'{len(self.usuarios_selecionados)} usuário(s) adicionados à lista.')
+            return self.usuarios_selecionados
+
+        except Exception as e:
+            self.hide_loading_T()
+            QMessageBox.warning(self, 'Aviso', f'Erro ao adicionar usuários à lista: {e}')
             return []
 
-        usuarios_selecionados = []
-
-        for row in set(item.row() for item in selecionados):
-            distinguished_name = self.table_existing_users.item(row, 2).text()  # Pega o DistinguishedName
-            usuarios_selecionados.append(distinguished_name)
-
-        # Exibe a mensagem de confirmação
-        QMessageBox.information(self, "Sucesso", f'{len(usuarios_selecionados)} usuário(s) adicionados à lista.',
-                                )
-
-        print(f'{len(usuarios_selecionados)} usuário(s) adicionados à lista.')
-        return usuarios_selecionados
+        finally:
+            self.hide_loading_T()
 
     def mover_usuarios(self):
         """
         Move um ou mais usuários para uma nova OU no Active Directory.
         """
-        # Obtém os usuários selecionados
-        usuarios_list = self.adicionar_selecionados_a_lista()
+        if not self.usuarios_selecionados:
+            QMessageBox.warning(self, 'Aviso', 'Nenhum usuário selecionado.')
+            return
 
         # Obtém a lista de OUs
-        #lista_ous = self.listar_ous()
-
-        # Exibe o diálogo para selecionar a OU
-
         ous = self.listar_ous()
         if not ous:
             QMessageBox.warning(self, 'Aviso', 'Nenhuma OU encontrada no AD.')
@@ -625,38 +827,52 @@ class ExcelProcessor(QMainWindow):
         if dialog.exec() == QDialog.DialogCode.Accepted:
             destino_ou = dialog.get_selected_ou()
 
-            # Move os usuários selecionados
-            if isinstance(usuarios_list, list):  # Se for lista, processa cada usuário
-                comandos = [
-                    f'Move-ADObject -Identity "{usuario}" -TargetPath "{destino_ou}"'
-                    for usuario in usuarios_list
-                ]
-                comando_powershell = ";\n".join(comandos)
-            else:  # Se for apenas um usuário
-                comando_powershell = f'Move-ADObject -Identity "{usuarios_list}" -TargetPath "{destino_ou}"'
+            # Lista para armazenar usuários que não foram movidos
+            usuarios_nao_movidos = []
 
-            # Executa o comando no PowerShell
-            try:
-                resultado = subprocess.run(
-                    ["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-Command", comando_powershell],
-                    capture_output=True,
-                    text=True
-                )
+            # Executa o comando PowerShell para cada usuário selecionado
+            for usuario in self.usuarios_selecionados[:]:  # Usamos [:] para iterar sobre uma cópia da lista
+                comando_powershell = f'Move-ADObject -Identity "{usuario}" -TargetPath "{destino_ou}"'
 
-                if resultado.returncode != 0:
-                    print("Erro ao mover usuário(s):", resultado.stderr)
-                else:
-                    print("Usuário(s) movido(s) com sucesso:", resultado.stdout)
+                try:
+                    self.show_loading_t()
+                    resultado = subprocess.run(
+                        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-Command", comando_powershell],
+                        capture_output=True,
+                        text=True
+                    )
 
-            except Exception as e:
-                print("Erro ao executar PowerShell:", str(e))
+                    if resultado.returncode != 0:
+                        print(f"Erro ao mover usuário {usuario}:", resultado.stderr)
+                        usuarios_nao_movidos.append(usuario)  # Adiciona à lista de não movidos
+                    else:
+                        print(f"Usuário {usuario} movido com sucesso:", resultado.stdout)
+                        self.remover_usuario_da_tabela(usuario)  # Remove o usuário da tabela
 
-    # EXEMPLO DE USO:
-    # Suponha que `table_existing_users` seja seu QTableWidget
-    # usuarios_selecionados = adicionar_selecionados_a_lista(table_existing_users)
+                except Exception as e:
+                    print(f"Erro ao executar PowerShell para o usuário {usuario}:", str(e))
+                    usuarios_nao_movidos.append(usuario)  # Adiciona à lista de não movidos
 
-    # Agora, para mover todos esses usuários para uma OU destino:
-    # mover_usuarios(usuarios_selecionados, "OU=NovaOU,DC=teste,DC=local")
+            # Atualiza a lista de selecionados com os usuários que não foram movidos
+            self.usuarios_selecionados = usuarios_nao_movidos
+
+            self.hide_loading_T()
+
+            if not usuarios_nao_movidos:
+                QMessageBox.information(self, 'Sucesso', 'Saida sucesso.')
+            else:
+                QMessageBox.warning(self, 'Aviso',
+                                    f'Alguns usuários não foram movidos: {", ".join(usuarios_nao_movidos)}')
+
+    def remover_usuario_da_tabela(self, usuario_dn):
+        """
+        Remove um usuário específico da tabela pelo DistinguishedName.
+        """
+        for row in range(self.table_existing_users.rowCount() - 1, -1, -1):  # Percorre de trás para frente
+            item = self.table_existing_users.item(row, 2)  # Obtém a célula da coluna do DistinguishedName
+            if item and item.text() == usuario_dn:
+                self.table_existing_users.removeRow(row)  # Remove pelo índice
+                return  # Sai da função após remover o usuário
 
     def verificar_usuarios_movidos(self, usuarios, destino_ou):
         """Verifica se os usuários foram movidos corretamente para a OU de destino."""
@@ -730,7 +946,7 @@ class ExcelProcessor(QMainWindow):
         self.hide_loading()
 
     def excluir_usuarios(self):
-        """Exclui usuários do AD."""
+        """Exclui usuários do AD e os remove da tabela."""
         self.show_loading()
         try:
             # Verifica se há usuários selecionados
@@ -738,24 +954,45 @@ class ExcelProcessor(QMainWindow):
                 QMessageBox.warning(self, 'Aviso', 'Nenhum usuário selecionado para excluir.')
                 return
 
-            # Monta o comando PowerShell para excluir os usuários
-            comando = (
-                f'powershell -ExecutionPolicy Bypass -Command "'
-                f'foreach ($usuario in $usuarios_selecionados) {{ '
-                f'    Remove-ADUser -Identity $usuario.DistinguishedName -Confirm:$false '
-                f'}}"'
-            )
+            # Lista para armazenar usuários que não foram excluídos
+            usuarios_nao_excluidos = []
 
-            # Executa o comando
-            stdout, stderr = executar_comando(comando)
+            # Executa o comando PowerShell para cada usuário selecionado
+            for usuario in self.usuarios_selecionados[:]:  # Usamos [:] para iterar sobre uma cópia da lista
+                comando_powershell = f'Remove-ADUser -Identity "{usuario}" -Confirm:$false'
 
-            if stderr:
-                QMessageBox.critical(self, 'Erro', f'Erro ao excluir usuários: {stderr}')
+                try:
+                    resultado = subprocess.run(
+                        ["powershell.exe", "-ExecutionPolicy", "Bypass", "-NoProfile", "-Command", comando_powershell],
+                        capture_output=True,
+                        text=True
+                    )
+
+                    if resultado.returncode != 0:
+                        print(f"Erro ao excluir usuário {usuario}:", resultado.stderr)
+                        usuarios_nao_excluidos.append(usuario)  # Adiciona à lista de não excluídos
+                    else:
+                        print(f"Usuário {usuario} excluído com sucesso:", resultado.stdout)
+                        self.remover_usuario_da_tabela(usuario)  # Remove o usuário da tabela
+
+                except Exception as e:
+                    print(f"Erro ao executar PowerShell para o usuário {usuario}:", str(e))
+                    usuarios_nao_excluidos.append(usuario)  # Adiciona à lista de não excluídos
+
+            # Atualiza a lista de selecionados com os usuários que não foram excluídos
+            self.usuarios_selecionados = usuarios_nao_excluidos
+
+            if not usuarios_nao_excluidos:
+                QMessageBox.information(self, 'Sucesso', 'excluído com sucesso.')
             else:
-                QMessageBox.information(self, 'Sucesso', 'Usuários excluídos com sucesso.')
+                QMessageBox.warning(self, 'Aviso',
+                                    f'Alguns usuários não foram excluídos: {", ".join(usuarios_nao_excluidos)}')
+
         except Exception as e:
             QMessageBox.critical(self, 'Erro', f'Erro ao excluir usuários: {e}')
-        self.hide_loading()
+
+        finally:
+            self.hide_loading()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
