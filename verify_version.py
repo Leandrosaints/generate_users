@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import QMessageBox
 # Versão atual da aplicação
 CURRENT_VERSION = "1.0.0"
 
-# URL do arquivo verify_version.json no GitHub (usando raw.githubusercontent.com)
-VERSION_JSON_URL = "https://raw.githubusercontent.com/Leandrosaints/generate_users/main/verify_version.json"
+# URL do arquivo version.json no GitHub (usando raw.githubusercontent.com)
+VERSION_JSON_URL = "https://raw.githubusercontent.com/Leandrosaints/generate_users/main/version.json"
 
 
 def check_for_updates(parent):
@@ -15,7 +15,7 @@ def check_for_updates(parent):
     parent: O widget pai para o QMessageBox (geralmente self na sua classe principal).
     """
     try:
-        # Faz a requisição HTTP para o arquivo verify_version.json
+        # Faz a requisição HTTP para o arquivo version.json
         response = requests.get(VERSION_JSON_URL, timeout=5)
         response.raise_for_status()  # Levanta uma exceção se a requisição falhar
 
@@ -38,7 +38,7 @@ def check_for_updates(parent):
             QMessageBox.critical(
                 parent,
                 "Erro",
-                f"Erro ao processar o arquivo verify_version.json como JSON:\n{json_error}\n"
+                f"Erro ao processar o arquivo version.json como JSON:\n{json_error}\n"
                 f"Conteúdo bruto (primeiros 500 caracteres): {response.text[:500]}"
             )
             return
@@ -50,10 +50,10 @@ def check_for_updates(parent):
 
         # Verifica se os campos obrigatórios estão presentes
         if not remote_version:
-            QMessageBox.warning(parent, "Erro", "Campo 'version' não encontrado no arquivo verify_version.json.")
+            QMessageBox.warning(parent, "Erro", "Campo 'version' não encontrado no arquivo version.json.")
             return
         if not download_url:
-            QMessageBox.warning(parent, "Erro", "Campo 'download_url' não encontrado no arquivo verify_version.json.")
+            QMessageBox.warning(parent, "Erro", "Campo 'download_url' não encontrado no arquivo version.json.")
             return
 
         # Compara as versões
@@ -85,7 +85,7 @@ def check_for_updates(parent):
             QMessageBox.critical(
                 parent,
                 "Erro",
-                "Arquivo verify_version.json não encontrado no GitHub.\n"
+                "Arquivo version.json não encontrado no GitHub.\n"
                 "Verifique se o arquivo existe no repositório e se o URL está correto.\n"
                 f"URL tentado: {VERSION_JSON_URL}"
             )
