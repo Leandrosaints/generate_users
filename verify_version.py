@@ -6,11 +6,8 @@ from PyQt6.QtWidgets import QMessageBox
 CURRENT_VERSION = "1.0.0"
 
 # URL do arquivo verify_version.json no GitHub (usando raw.githubusercontent.com)
-VERSION_JSON_URL = "https://raw.githubusercontent.com/Leandrosaints/generate_users/b4665669c8aaaebbf5e509246c5fdd697cf414de/verify_version.json"
+VERSION_JSON_URL = "https://raw.githubusercontent.com/Leandrosaints/generate_users/main/verify_version.json"
 
-
-# Opção alternativa: usar a branch principal
-# VERSION_JSON_URL = "https://raw.githubusercontent.com/Leandrosaints/generate_users/main/verify_version.json"
 
 def check_for_updates(parent):
     """
@@ -22,15 +19,41 @@ def check_for_updates(parent):
         response = requests.get(VERSION_JSON_URL, timeout=5)
         response.raise_for_status()  # Levanta uma exceção se a requisição falhar
 
+        # Verifica se a resposta é um JSON válido
+        content_type = response.headers.get('Content-Type', '')
+        if 'application/json' not in content_type:
+            QMessageBox.warning(
+                parent,
+                "Erro",
+                f"A resposta do servidor não é um JSON válido.\n"
+                f"Tipo de conteúdo recebido: {content_type}\n"
+                f"Conteúdo bruto (primeiros 500 caracteres): {response.text[:500]}"
+            )
+            return
+
         # Lê o conteúdo do arquivo JSON
-        remote_data = response.json()
+        try:
+            remote_data = response.json()
+        except ValueError as json_error:
+            QMessageBox.critical(
+                parent,
+                "Erro",
+                f"Erro ao processar o arquivo verify_version.json como JSON:\n{json_error}\n"
+                f"Conteúdo bruto (primeiros 500 caracteres): {response.text[:500]}"
+            )
+            return
+
+        # Verifica se as chaves esperadas estão presentes no JSON
         remote_version = remote_data.get("version")
         download_url = remote_data.get("download_url")
         changelog = remote_data.get("changelog", "Nenhuma descrição disponível.")
 
+        # Verifica se os campos obrigatórios estão presentes
         if not remote_version:
-            QMessageBox.warning(parent, "Erro",
-                                "Não foi possível obter a versão remota do arquivo verify_version.json.")
+            QMessageBox.warning(parent, "Erro", "Campo 'version' não encontrado no arquivo verify_version.json.")
+            return
+        if not download_url:
+            QMessageBox.warning(parent, "Erro", "Campo 'download_url' não encontrado no arquivo verify_version.json.")
             return
 
         # Compara as versões
@@ -70,14 +93,5 @@ def check_for_updates(parent):
             QMessageBox.warning(parent, "Erro", f"Falha ao verificar atualizações: {e}")
     except requests.exceptions.RequestException as e:
         QMessageBox.warning(parent, "Erro", f"Falha ao conectar ao GitHub: {e}")
-    except ValueError as e:
-        QMessageBox.warning(parent, "Erro", f"Erro ao processar o arquivo verify_version.json: {e}")
 
 
-'''# Exemplo de uso na sua classe principal (ExcelProcessor ou similar)
-def __init__(self):
-    super().__init__()
-    # ... resto do seu código de inicialização ...
-
-    # Verifica atualizações ao iniciar a aplicação
-    self.check_for_updates()'''
